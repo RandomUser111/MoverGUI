@@ -31,13 +31,15 @@
 ### Для запуска готового релиза
 
 - Windows 10/11 x64.
-- Устанавливать .NET Runtime не требуется: релиз собирается как self-contained приложение.
+- Microsoft .NET 10 Desktop Runtime (x64)
+- доступ к кассам SetRetail по SSH
+- TCP-порт 22 должен быть доступен с компьютера пользователя
 
 ### Для сборки из исходников
 
 - Windows 10/11 x64;
-- .NET 8 SDK x64;
 - PowerShell 5.1 или PowerShell 7+.
+- Microsoft .NET 10 Desktop Runtime (x64)
 
 Проверка SDK:
 
