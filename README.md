@@ -1,5 +1,5 @@
 # Mover GUI
-<img width="457" height="325" alt="Screenshot_2" align="center" src="https://github.com/user-attachments/assets/4c3cbf5a-7024-425a-b632-6d1acc34f0a7" />
+<img width="915" height="651" alt="Screenshot_2" src="https://github.com/user-attachments/assets/aafcd01d-50df-41bd-9337-7a6b70de7d4b" />
 
 **Mover GUI** — компактная Windows-утилита для отправки файлов на удалённые кассы SetRetail по SSH/SCP.
 
