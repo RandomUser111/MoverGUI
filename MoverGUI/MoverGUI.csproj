@@ -1,17 +1,41 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
     <AssemblyName>MoverGUI</AssemblyName>
     <RootNamespace>MoverGUI</RootNamespace>
     <Version>1.0.0</Version>
+
     <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- Целевая платформа -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+
+    <!-- Компактная публикация.
+         .NET Desktop Runtime устанавливается отдельно -->
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+
+    <!-- Не увеличивать EXE за счет ReadyToRun -->
+    <PublishReadyToRun>false</PublishReadyToRun>
+
+    <!-- Для WinForms trimming пока не используем -->
+    <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- Не включать отладочную информацию в Release -->
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\pscp.exe" LogicalName="MoverGUI.pscp.exe" />
+    <EmbeddedResource Include="Resources\pscp.exe"
+                      LogicalName="MoverGUI.pscp.exe" />
   </ItemGroup>
+
 </Project>

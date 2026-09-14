@@ -1,171 +1,250 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidatePattern('^v?\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$')]
     [string]$Version,
 
     [switch]$Publish,
+
     [switch]$Draft
 )
 
-$ErrorActionPreference = 'Stop'
-Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
 
-# Keep this file ASCII-only for Windows PowerShell 5.1 compatibility.
-$Root = $PSScriptRoot
-$Project = Join-Path $Root 'MoverGUI\MoverGUI.csproj'
-$Dist = Join-Path $Root 'dist'
-$Temp = Join-Path $Root '.release-temp'
+$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Project = Join-Path $Root "MoverGUI\MoverGUI.csproj"
 
-$CleanVersion = $Version.TrimStart('v')
-$Tag = "v$CleanVersion"
-$BaseName = "MoverGUI-$Tag-win-x64"
-$PublishDir = Join-Path $Temp 'publish'
-$PackageDir = Join-Path $Temp $BaseName
-$ExeSource = Join-Path $PublishDir 'MoverGUI.exe'
-$ExeAsset = Join-Path $Dist "$BaseName.exe"
-$ZipAsset = Join-Path $Dist "$BaseName.zip"
-$Checksums = Join-Path $Dist 'SHA256SUMS.txt'
+$DistDir = Join-Path $Root "dist"
+$WorkDir = Join-Path $Root ".release"
+$PublishDir = Join-Path $WorkDir "publish"
+$PackageDir = Join-Path $WorkDir "package"
 
-function Require-Command([string]$Name) {
-    if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-        throw "Required command was not found: $Name"
-    }
-}
+$Tag = "v$Version"
 
-function Invoke-Checked([string]$File, [string[]]$Arguments) {
-    & $File @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$File failed with exit code $LASTEXITCODE"
-    }
-}
+$ExeFileName = "MoverGUI-v$Version-win-x64.exe"
+$ZipFileName = "MoverGUI-v$Version-win-x64.zip"
 
-Write-Host '========================================' -ForegroundColor Cyan
-Write-Host 'Mover GUI Release Builder' -ForegroundColor Cyan
-Write-Host "Version: $CleanVersion" -ForegroundColor Cyan
-Write-Host '========================================' -ForegroundColor Cyan
+$ExeFile = Join-Path $DistDir $ExeFileName
+$ZipFile = Join-Path $DistDir $ZipFileName
+$HashFile = Join-Path $DistDir "SHA256SUMS.txt"
 
-Require-Command 'dotnet'
+Write-Host ""
+Write-Host "========================================="
+Write-Host " MoverGUI Release Builder"
+Write-Host " Version: $Version"
+Write-Host "========================================="
+Write-Host ""
 
 if (-not (Test-Path $Project)) {
-    throw "Project file was not found: $Project"
+    throw "Project not found: $Project"
 }
 
-if (Test-Path $Temp) {
-    Remove-Item $Temp -Recurse -Force
-}
-if (Test-Path $Dist) {
-    Remove-Item $Dist -Recurse -Force
-}
+$DotNet = Get-Command dotnet -ErrorAction SilentlyContinue
 
-New-Item -ItemType Directory -Path $PublishDir -Force | Out-Null
-New-Item -ItemType Directory -Path $PackageDir -Force | Out-Null
-New-Item -ItemType Directory -Path $Dist -Force | Out-Null
-
-Write-Host ''
-Write-Host '[1/5] Building application...'
-
-$PublishArgs = @(
-    'publish', $Project,
-    '-c', 'Release',
-    '-r', 'win-x64',
-    '--self-contained', 'true',
-    '-p:PublishSingleFile=true',
-    '-p:IncludeNativeLibrariesForSelfExtract=true',
-    '-p:EnableCompressionInSingleFile=true',
-    '-p:PublishReadyToRun=false',
-    '-p:DebugType=None',
-    '-p:DebugSymbols=false',
-    "-p:Version=$CleanVersion",
-    '-o', $PublishDir
-)
-
-Invoke-Checked 'dotnet' $PublishArgs
-
-if (-not (Test-Path $ExeSource)) {
-    throw "Executable was not found: $ExeSource"
+if (-not $DotNet) {
+    throw ".NET SDK was not found."
 }
 
-Write-Host '[2/5] Preparing release files...'
-Copy-Item $ExeSource $ExeAsset -Force
-Copy-Item $ExeSource (Join-Path $PackageDir 'MoverGUI.exe') -Force
+Write-Host "[1/6] Checking .NET SDK..."
 
-$Readme = Join-Path $Root 'README.md'
-$ThirdParty = Join-Path $Root 'THIRD_PARTY_NOTICES.md'
+dotnet --version
+
+if (Test-Path $DistDir) {
+    Remove-Item $DistDir -Recurse -Force
+}
+
+if (Test-Path $WorkDir) {
+    Remove-Item $WorkDir -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $DistDir | Out-Null
+New-Item -ItemType Directory -Path $PublishDir | Out-Null
+New-Item -ItemType Directory -Path $PackageDir | Out-Null
+
+Write-Host ""
+Write-Host "[2/6] Building application..."
+
+dotnet publish $Project `
+    -c Release `
+    -r win-x64 `
+    --self-contained false `
+    -p:PublishSingleFile=true `
+    -p:PublishReadyToRun=false `
+    -p:PublishTrimmed=false `
+    -p:DebugType=None `
+    -p:DebugSymbols=false `
+    -p:Version=$Version `
+    -o $PublishDir
+
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet publish failed."
+}
+
+$PublishedExe = Join-Path $PublishDir "MoverGUI.exe"
+
+if (-not (Test-Path $PublishedExe)) {
+    throw "MoverGUI.exe was not created."
+}
+
+Write-Host ""
+Write-Host "[3/6] Preparing release files..."
+
+Copy-Item $PublishedExe $ExeFile
+
+Copy-Item $PublishedExe (Join-Path $PackageDir "MoverGUI.exe")
+
+$Readme = Join-Path $Root "README.md"
+
 if (Test-Path $Readme) {
-    Copy-Item $Readme (Join-Path $PackageDir 'README.md') -Force
+    Copy-Item $Readme $PackageDir
 }
+
+$ThirdParty = Join-Path $Root "THIRD_PARTY_NOTICES.md"
+
 if (Test-Path $ThirdParty) {
-    Copy-Item $ThirdParty (Join-Path $PackageDir 'THIRD_PARTY_NOTICES.md') -Force
+    Copy-Item $ThirdParty $PackageDir
 }
 
-Write-Host '[3/5] Creating ZIP package...'
-Compress-Archive -Path (Join-Path $PackageDir '*') -DestinationPath $ZipAsset -CompressionLevel Optimal -Force
+Write-Host ""
+Write-Host "[4/6] Creating ZIP package..."
 
-Write-Host '[4/5] Calculating SHA256...'
-$HashExe = (Get-FileHash $ExeAsset -Algorithm SHA256).Hash.ToLowerInvariant()
-$HashZip = (Get-FileHash $ZipAsset -Algorithm SHA256).Hash.ToLowerInvariant()
-@(
-    "$HashExe  $([IO.Path]::GetFileName($ExeAsset))",
-    "$HashZip  $([IO.Path]::GetFileName($ZipAsset))"
-) | Set-Content -Path $Checksums -Encoding ASCII
+Compress-Archive `
+    -Path (Join-Path $PackageDir "*") `
+    -DestinationPath $ZipFile `
+    -CompressionLevel Optimal
 
-Remove-Item $Temp -Recurse -Force
+Write-Host ""
+Write-Host "[5/6] Calculating SHA256..."
 
-Write-Host '[5/5] Release files are ready.' -ForegroundColor Green
-Write-Host ''
-Write-Host $ExeAsset
-Write-Host $ZipAsset
-Write-Host $Checksums
+$ExeHash = (Get-FileHash $ExeFile -Algorithm SHA256).Hash.ToLower()
+$ZipHash = (Get-FileHash $ZipFile -Algorithm SHA256).Hash.ToLower()
+
+@"
+$ExeHash  $ExeFileName
+$ZipHash  $ZipFileName
+"@ | Set-Content $HashFile -Encoding ASCII
+
+$ExeSize = [math]::Round((Get-Item $ExeFile).Length / 1MB, 2)
+$ZipSize = [math]::Round((Get-Item $ZipFile).Length / 1MB, 2)
+
+Write-Host ""
+Write-Host "[6/6] Release files created."
+Write-Host ""
+Write-Host "EXE : $ExeFileName ($ExeSize MB)"
+Write-Host "ZIP : $ZipFileName ($ZipSize MB)"
+Write-Host "HASH: SHA256SUMS.txt"
 
 if ($Publish) {
-    Write-Host ''
-    Write-Host 'Publishing GitHub Release...' -ForegroundColor Cyan
 
-    Require-Command 'git'
-    Require-Command 'gh'
+    Write-Host ""
+    Write-Host "========================================="
+    Write-Host " Publishing GitHub Release"
+    Write-Host "========================================="
+    Write-Host ""
 
-    Invoke-Checked 'gh' @('auth', 'status')
-    Invoke-Checked 'git' @('rev-parse', '--is-inside-work-tree')
+    $Git = Get-Command git -ErrorAction SilentlyContinue
 
-    $Dirty = (& git status --porcelain)
-    if ($LASTEXITCODE -ne 0) {
-        throw 'git status failed.'
-    }
-    if ($Dirty) {
-        throw 'Working tree is not clean. Commit or stash changes before publishing a release.'
+    if (-not $Git) {
+        throw "Git was not found."
     }
 
-    & git rev-parse --verify --quiet "refs/tags/$Tag" | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        throw "Local tag already exists: $Tag"
+    $Gh = Get-Command gh -ErrorAction SilentlyContinue
+
+    if (-not $Gh) {
+        throw "GitHub CLI (gh) was not found."
     }
 
-    Invoke-Checked 'git' @('tag', '-a', $Tag, '-m', "Mover GUI $CleanVersion")
-    Invoke-Checked 'git' @('push', 'origin', $Tag)
+    Push-Location $Root
 
-    $NotesFile = Join-Path $Root "release-notes\$Tag.md"
-    $ReleaseArgs = @(
-        'release', 'create', $Tag,
-        $ExeAsset,
-        $ZipAsset,
-        $Checksums,
-        '--title', "Mover GUI $CleanVersion",
-        '--verify-tag'
-    )
+    try {
 
-    if ($Draft) {
-        $ReleaseArgs += '--draft'
+        Write-Host "Checking GitHub authentication..."
+
+        gh auth status
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "GitHub CLI is not authenticated."
+        }
+
+        Write-Host ""
+        Write-Host "Checking repository status..."
+
+        $GitStatus = git status --porcelain
+
+        if ($GitStatus) {
+            Write-Host ""
+            Write-Host "Working tree is not clean:"
+            Write-Host $GitStatus
+            Write-Host ""
+            throw "Commit and push your changes before publishing a release."
+        }
+
+        $ExistingTag = git tag --list $Tag
+
+        if (-not $ExistingTag) {
+
+            Write-Host ""
+            Write-Host "Creating tag $Tag..."
+
+            git tag -a $Tag -m "MoverGUI $Version"
+
+            if ($LASTEXITCODE -ne 0) {
+                throw "Unable to create Git tag."
+            }
+
+            Write-Host "Pushing tag to GitHub..."
+
+            git push origin $Tag
+
+            if ($LASTEXITCODE -ne 0) {
+                throw "Unable to push Git tag."
+            }
+        }
+        else {
+            Write-Host "Tag $Tag already exists."
+        }
+
+        $NotesFile = Join-Path $Root "release-notes\$Tag.md"
+
+        $ReleaseArgs = @(
+            "release",
+            "create",
+            $Tag,
+            $ExeFile,
+            $ZipFile,
+            $HashFile,
+            "--title",
+            "MoverGUI $Version"
+        )
+
+        if (Test-Path $NotesFile) {
+            $ReleaseArgs += "--notes-file"
+            $ReleaseArgs += $NotesFile
+        }
+        else {
+            $ReleaseArgs += "--generate-notes"
+        }
+
+        if ($Draft) {
+            $ReleaseArgs += "--draft"
+        }
+
+        Write-Host ""
+        Write-Host "Creating GitHub Release..."
+
+        & gh @ReleaseArgs
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release creation failed."
+        }
+
+        Write-Host ""
+        Write-Host "GitHub Release created successfully."
     }
-
-    if (Test-Path $NotesFile) {
-        $ReleaseArgs += @('--notes-file', $NotesFile)
+    finally {
+        Pop-Location
     }
-    else {
-        $ReleaseArgs += '--generate-notes'
-    }
-
-    Invoke-Checked 'gh' $ReleaseArgs
-
-    Write-Host ''
-    Write-Host "GitHub Release $Tag was created successfully." -ForegroundColor Green
 }
+
+Write-Host ""
+Write-Host "========================================="
+Write-Host " Done"
+Write-Host "========================================="
