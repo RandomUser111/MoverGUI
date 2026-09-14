@@ -4,6 +4,7 @@ obj/
 publish/
 dist/
 artifacts/
+.release/
 
 # Visual Studio / Rider
 .vs/
